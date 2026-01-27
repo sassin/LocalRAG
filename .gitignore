@@ -1,0 +1,8 @@
+.env
+/agents/__pycache__
+/rag/__pycache__
+/venv
+resources/data/WJCO-10-300.pdf
+resources/data/lbr-27-212.pdf
+/resources/project_alpha
+/resources/.rag_store
