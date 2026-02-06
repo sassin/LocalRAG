@@ -33,7 +33,7 @@ async def main():
         session_service=session_service,
     )
 
-    print("PDF Research Agent CLI. Type 'exit' to quit.\n")
+    print("Research Agent CLI. Type 'exit' to quit.\n")
 
     while True:
         q = (await ainput("You: ")).strip()

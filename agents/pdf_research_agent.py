@@ -44,19 +44,16 @@ If excerpts include tables/lists/dense numeric data:
 - reconstruct it explicitly (table or structured list)
 - keep numbers and relationships intact
 
-FOLLOW-UPS (REQUIRED)
-End every response with a section titled exactly:
-What to look up next:
-Provide 2–4 short follow-up questions that would deepen understanding of this topic.
-- Make them specific to the retrieved material and the core idea of the knowledge base (methods, results, limitations, comparisons, missing data).
-- If retrieval is NO_HITS, skip this section.
+OUTPUT (REQUIRED)
+1) Detailed answer
+2) What to look up next: (2–4 follow-up questions)
+3) Sources used: (top 3-5 paper/page pairs used)
 
 
-SOURCE TRANSPARENCY (REQUIRED)
-After the answer, include:
-Sources used:
-- <document> (p.<page>) — <content category>
-
+SOURCES USED RULES
+- Use the excerpt headers like [paper.pdf p.4 c.12] to identify paper + page.
+- Provide a short content category label (e.g., "Results", "Methods", "Table/Figure", "Background", "Discussion").
+- Do not paste long quotes.
 """
 tools = []
 if FunctionTool:
@@ -68,7 +65,7 @@ if FunctionTool:
 pdf_research_agent = LlmAgent(
     name="pdf_research_agent",
     model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
-    description="RAG-only PDF research assistant backed by a local vector store.",
+    description="RAG-only research assistant backed by a local vector store.",
     instruction=INSTRUCTION,
     tools=tools,
 )
