@@ -8,3 +8,5 @@ resources/data/lbr-27-212.pdf
 /resources/.rag_store
 *.pdf
 /__pycache__
+/llm/__pycache__
+/prompts/__pycache__
