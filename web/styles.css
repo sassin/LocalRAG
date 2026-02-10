@@ -1,0 +1,138 @@
+:root{
+  --bg:#0b0f17;
+  --card:#121a2a;
+  --text:#e8eefc;
+  --muted:#9fb0d0;
+  --border:rgba(255,255,255,.08);
+
+  /* set in JS */
+  --composer-h: 72px;
+  --kb: 0px;                 /* keyboard height */
+}
+
+*{ box-sizing:border-box; }
+html, body{
+  height:100%;
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  overflow: hidden;          /* prevent body scroll */
+}
+
+.app{
+  height: 100%;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* Frozen header */
+.header{
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display:flex;
+  gap:12px;
+  justify-content:space-between;
+  align-items:flex-end;
+  padding:12px;
+  border-bottom:1px solid var(--border);
+  background:var(--card);
+}
+
+.title .h1{ font-size:20px; font-weight:700; }
+.title .sub{ font-size:13px; color:var(--muted); margin-top:4px; }
+
+.controls{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+select{
+  border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  padding:10px 12px;
+  outline:none;
+}
+
+/* Chat area scrolls; reserve room for composer + keyboard */
+.chat{
+  flex:1;
+  overflow-y:auto;
+  -webkit-overflow-scrolling: touch;
+  padding:12px;
+  padding-bottom: calc(var(--composer-h) + 20px);
+}
+
+/* message bubbles */
+.msg{
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  white-space:pre-wrap;
+  line-height:1.35;
+  margin-bottom:10px;
+  max-width: 92%;
+}
+.msg.user{ margin-left:auto; background: rgba(106,169,255,.08); }
+.msg.agent{ margin-right:auto; background: rgba(255,255,255,.03); }
+.meta{ color:var(--muted); font-size:12px; margin-top:6px; }
+
+/* Composer pinned, but lifted by keyboard height */
+.composerWrap{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+  transform: translateY(calc(-1 * var(--kb)));
+  transition: none; /* ✅ no bounce */
+  will-change: transform;
+}
+
+.composer{
+  max-width: 920px;
+  margin: 0 auto;
+  display:flex;
+  gap:10px;
+  align-items:flex-end;
+  padding:10px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+
+textarea{
+  flex:1;
+  resize:none;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  padding:10px 12px;
+  outline:none;
+
+  /* iOS: prevent zoom + better keyboard handling */
+  font-size:16px;
+  line-height:1.3;
+
+  min-height:44px;
+  max-height:180px;
+  overflow-y:auto;
+}
+
+button{
+  border-radius:12px;
+  border:1px solid rgba(106,169,255,.35);
+  background: rgba(106,169,255,.16);
+  color: var(--text);
+  padding:10px 14px;
+  cursor:pointer;
+}
+button:disabled{ opacity:.5; cursor:not-allowed; }

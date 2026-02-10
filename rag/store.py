@@ -30,6 +30,7 @@ class LocalRAGStore:
                     "source_path": r["source_path"],
                     "chunk_index": r["chunk_index"],
                     "page": r.get("page"),
+                    "chunk_type": r.get("chunk_type"),
                     "text": r["text"],
                 }
             )

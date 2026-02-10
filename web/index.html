@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Research Chat</title>
+  <link rel="stylesheet" href="/web/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="title">
+        <div class="h1">Research Chat</div>
+        <div class="sub">Local RAG + (OpenAI / Gemini)</div>
+      </div>
+
+      <div class="controls">
+        <select id="provider" aria-label="Model provider">
+          <option value="openai" selected>OpenAI (gpt-4o-mini)</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </div>
+    </header>
+
+    <main id="chat" class="chat" aria-live="polite" aria-label="Chat messages"></main>
+
+    <div class="composerWrap" id="composerWrap">
+      <footer class="composer" id="composer">
+        <textarea id="input" rows="1" placeholder="Ask a question…" autocomplete="off"></textarea>
+        <button id="send" type="button">Send</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="/web/app.js"></script>
+</body>
+</html>

@@ -1,66 +1,157 @@
-import asyncio
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+# server.py
+import os
+import re
+import uuid
+from pathlib import Path
+
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi.templating import Jinja2Templates
-from fastapi import Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from google.genai import types
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
+from rag.tool import rag_search_2pass, rag_get_page
+from llm.openai_client import openai_chat
+from llm.gemini_client import gemini_chat
+from prompts.research_prompt import build_chat_prompt, DEFAULT_CONFIG
+from memory import InMemoryChatStore
 
-from agents.pdf_research_agent import pdf_research_agent
-import os
-from fastapi import Header, HTTPException
+APP_DIR = Path(__file__).resolve().parent
+WEB_DIR = APP_DIR / "web"
+
+ACCESS_KEY = os.getenv("APP_ACCESS_KEY", "").strip()
+DEFAULT_PROVIDER = os.getenv("DEFAULT_LLM_PROVIDER", "openai").strip().lower()
+RETURN_EVIDENCE = os.getenv("RETURN_EVIDENCE", "0").strip() == "1"
+
+_ALLOWED_PROVIDERS = {"openai", "gemini"}
+if DEFAULT_PROVIDER not in _ALLOWED_PROVIDERS:
+    DEFAULT_PROVIDER = "openai"
+
+# Session memory store (Option B)
+CHAT_STORE = InMemoryChatStore(ttl_seconds=6 * 60 * 60)
 
 app = FastAPI()
+app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 
-# Single session service for the server lifetime
-session_service = InMemorySessionService()
-runner = Runner(agent=pdf_research_agent, app_name="rag_web", session_service=session_service)
 
-API_KEY = os.getenv("RAG_WEB_API_KEY", "")
-templates = Jinja2Templates(directory="templates")
-
-def require_api_key(x_api_key: str | None):
-    if not API_KEY:
-        # fail closed so you don't accidentally expose without auth
-        raise HTTPException(status_code=500, detail="Server misconfigured: RAG_WEB_API_KEY missing")
-    if x_api_key != API_KEY:
+def _require_key(request: Request):
+    if not ACCESS_KEY:
+        return
+    supplied = request.headers.get("X-ACCESS-KEY", "")
+    if supplied != ACCESS_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-class ChatRequest(BaseModel):
-    user_id: str = "web_user"
-    session_id: str = "web_session"
-    message: str
+def _extract_sources_from_evidence(evidence: str) -> list[str]:
+    """
+    Evidence headers look like:
+      [paper.pdf p.4 c.12]
+    Capture: "paper.pdf p.4"
+    """
+    sources = []
+    for m in re.finditer(r"\[([^\]]+)\]", evidence or ""):
+        hdr = m.group(1)  # e.g. "JAAD.pdf p.4 c.0"
+        # keep file + page only
+        parts = hdr.split()
+        if not parts:
+            continue
+        file_part = parts[0]
+        page_part = next((p for p in parts[1:] if p.startswith("p.")), "")
+        s = (file_part + (" " + page_part if page_part else "")).strip()
+        if s and s not in sources:
+            sources.append(s)
+    return sources[:8]
 
-@app.on_event("startup")
-async def startup():
-    # Create a default session so first request doesn't fail
-    await session_service.create_session(app_name="rag_web", user_id="web_user", session_id="web_session")
 
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+@app.get("/health")
+def health():
+    return {
+        "ok": True,
+        "default_provider": DEFAULT_PROVIDER,
+        "auth_enabled": bool(ACCESS_KEY),
+        "return_evidence": RETURN_EVIDENCE,
+        "retrieval": "2pass+get_page",
+        "memory": "in_memory",
+    }
 
-@app.post("/chat")
-async def chat(req: ChatRequest, x_api_key: str | None = Header(default=None)):
-    require_api_key(x_api_key)
-    # Ensure session exists (create if new user/session)
+
+@app.get("/")
+def root():
+    return FileResponse(str(WEB_DIR / "index.html"))
+
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    _require_key(request)
+
     try:
-        await session_service.get_session(app_name="rag_web", user_id=req.user_id, session_id=req.session_id)
+        body = await request.json()
     except Exception:
-        await session_service.create_session(app_name="rag_web", user_id=req.user_id, session_id=req.session_id)
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    msg = types.Content(parts=[types.Part(text=req.message)])
+    user_msg = (body.get("message") or "").strip()
+    provider = (body.get("provider") or DEFAULT_PROVIDER).strip().lower()
+    session_id = (body.get("session_id") or "").strip() or uuid.uuid4().hex
 
-    final_text = None
-    async for event in runner.run_async(user_id=req.user_id, session_id=req.session_id, new_message=msg):
-        if event.is_final_response() and event.content and event.content.parts:
-            final_text = "\n".join([p.text for p in event.content.parts if getattr(p, "text", None)])
+    if provider not in _ALLOWED_PROVIDERS:
+        raise HTTPException(status_code=400, detail="provider must be 'openai' or 'gemini'")
 
-    return {"reply": final_text or "(no response)"}
+    if not user_msg:
+        return JSONResponse({"answer": "Please enter a question.", "provider": provider, "session_id": session_id})
+
+    state = CHAT_STORE.get(session_id)
+
+    mode = (body.get("mode") or "rag").strip().lower()
+
+    # Retrieval (always evidence-first)
+    if mode == "get_page":
+        source_path = (body.get("source_path") or "").strip()
+        page = body.get("page")
+        if not source_path or page is None:
+            raise HTTPException(status_code=400, detail="mode=get_page requires source_path and page")
+
+        evidence = rag_get_page(source_path=source_path, page=page)
+        if evidence == "NO_HITS":
+            return JSONResponse(
+                {"answer": "I couldn’t find that page in the indexed documents.", "provider": provider, "session_id": session_id}
+            )
+    else:
+        # Memory-aware query hinting (small, safe)
+        ctx_hint = state.summary.strip()
+        # keep it short to avoid poisoning retrieval
+        query_for_retrieval = user_msg if not ctx_hint else f"{user_msg}\nContext hint: {ctx_hint}"
+        evidence = rag_search_2pass(query_for_retrieval)
+        if evidence == "NO_HITS":
+            return JSONResponse(
+                {"answer": "I couldn’t find relevant evidence in the indexed documents.", "provider": provider, "session_id": session_id}
+            )
+
+    # Update memory with sources (from evidence)
+    used_sources = _extract_sources_from_evidence(evidence)
+    state.add_sources(used_sources)
+
+    # Build prompt with small session context
+    context_block = state.build_context_block()
+    prompt = build_chat_prompt(user_q=user_msg, evidence=evidence, cfg=DEFAULT_CONFIG, context=context_block)
+
+    # Generation
+    try:
+        if provider == "gemini":
+            answer = gemini_chat(prompt)
+        else:
+            answer = openai_chat(prompt)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
+
+    # Save turn + update summary
+    state.add_turn(user_msg, answer)
+    state.update_summary_heuristic()
+
+    payload = {"answer": answer, "provider": provider, "session_id": session_id}
+    if RETURN_EVIDENCE:
+        payload["evidence"] = evidence
+        payload["mode"] = mode
+        payload["context_used"] = context_block
+
+    return JSONResponse(payload)
