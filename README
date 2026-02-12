@@ -1,0 +1,17 @@
+# LocalRAG — Evidence-First Research Assistant
+
+LocalRAG is a privacy-preserving, evidence-grounded research assistant that lets you chat with your own documents.
+
+It is designed for:
+- Research papers
+- Medical / scientific literature
+- Technical documentation
+- Tables, figures, and structured data
+
+Unlike generic chatbots, LocalRAG:
+- Never uploads your documents
+- Always retrieves evidence before answering
+- Explicitly cites sources
+- Supports conversational follow-ups with memory
+
+👉 Start here: `docs/README.md`
