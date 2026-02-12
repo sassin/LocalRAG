@@ -1,0 +1,29 @@
+LocalRAG/
+├── rag/
+│   ├── index.py          # Document ingestion + vector indexing
+│   ├── store.py          # FAISS-backed vector store
+│   └── tool.py           # RAG tools (2-pass, get_page)
+│
+├── prompts/
+│   └── research_prompt.py  # Shared prompts (agent + server)
+│
+├── llm/
+│   ├── openai_client.py  # OpenAI wrapper
+│   └── gemini_client.py  # Gemini wrapper
+│
+├── agents/
+│   └── research_agent.py # ADK LlmAgent definition
+│
+├── web/
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
+│
+├── memory.py             # Session memory (Option B)
+├── server.py             # FastAPI server
+├── chat_cli.py           # Local CLI (session-aware)
+├── resources/
+│   ├── data/             # Your documents
+│   └── .rag_store/       # FAISS index + records
+│
+└── README.md
